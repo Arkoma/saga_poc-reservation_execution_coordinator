@@ -1,7 +1,10 @@
 package com.saga_poc.reservation_execution_coordinator.message;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saga_poc.reservation_execution_coordinator.model.Reservation;
 import com.saga_poc.reservation_execution_coordinator.model.StatusEnum;
+import com.saga_poc.reservation_execution_coordinator.service.ReservationStepCoordinator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,7 +29,13 @@ class ReservationStatusMessagingIT {
     private KafkaTemplate<String, String> kafkaTemplate;
 
     @Autowired
+    private ReservationStepCoordinator reservationStepCoordinator;
+
+    @Autowired
     private ReservationStatusProducer producerUnderTest;
+
+    @Autowired
+    private ReservationStatusConsumer consumerUnderTest;
 
     @Value("${spring.kafka.template.default-topic}")
     private String topic;
@@ -49,8 +58,16 @@ class ReservationStatusMessagingIT {
         assertSame(kafkaTemplate, injectedKafkaTemplate);
     }
 
+
     @Test
-    void sentReservationStatusIsReceived() throws InterruptedException {
+    void setReservationStepCoordinatorInReservationStatusConsumer() {
+        ReservationStepCoordinator injectedReservationStepCoordinator = (ReservationStepCoordinator) ReflectionTestUtils
+                .getField(consumerUnderTest, "reservationStepCoordinator");
+        assertSame(reservationStepCoordinator, injectedReservationStepCoordinator);
+    }
+
+    @Test
+    void sentReservationStatusIsReceived() throws InterruptedException, JsonProcessingException {
         final String hotelName = "Holiday Inn";
         final String carMake = "Ford";
         final String carModel = "Model-T";
@@ -65,7 +82,19 @@ class ReservationStatusMessagingIT {
                 .status(StatusEnum.PENDING)
                 .build();
         producerUnderTest.send(topic, reservation);
-        Thread.sleep(5000);
-
+        String json = null;
+        while (json == null) {
+            Thread.sleep(500);
+            json = consumerUnderTest.getPayload();
+        }
+        Reservation consumedReservation = new ObjectMapper().readValue(json, Reservation.class);
+        assertAll(() -> {
+            assertEquals(id, consumedReservation.getId());
+            assertEquals(customerName, consumedReservation.getCustomerName());
+            assertEquals(hotelName, consumedReservation.getHotelName());
+            assertEquals(carMake, consumedReservation.getCarMake());
+            assertEquals(carModel, consumedReservation.getCarModel());
+            assertEquals(StatusEnum.PENDING, consumedReservation.getStatus());
+        });
     }
 }

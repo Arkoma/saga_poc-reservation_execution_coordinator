@@ -1,5 +1,7 @@
 package com.saga_poc.reservation_execution_coordinator.message;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saga_poc.reservation_execution_coordinator.model.Reservation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -14,7 +16,8 @@ public class ReservationStatusProducer {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    public void send(String topic, Reservation reservation) {
-
+    public void send(String topic, Reservation reservation) throws JsonProcessingException {
+        String payload = new ObjectMapper().writeValueAsString(reservation);
+        this.kafkaTemplate.send(topic, payload);
     }
 }

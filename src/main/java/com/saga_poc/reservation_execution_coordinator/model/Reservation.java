@@ -1,16 +1,10 @@
 package com.saga_poc.reservation_execution_coordinator.model;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.ToString;
-
-import javax.persistence.Entity;
-import javax.persistence.GeneratedValue;
-import javax.persistence.GenerationType;
-import javax.persistence.Id;
+import lombok.*;
 
 @Getter
+@AllArgsConstructor
+@NoArgsConstructor
 @Builder
 public class Reservation {
     private Long id;
@@ -23,6 +17,4 @@ public class Reservation {
     private String flightNumber;
     private String flightId;
     private StatusEnum status;
-
-
 }
