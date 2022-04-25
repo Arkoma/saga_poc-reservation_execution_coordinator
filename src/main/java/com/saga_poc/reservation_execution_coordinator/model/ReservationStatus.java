@@ -1,7 +1,6 @@
 package com.saga_poc.reservation_execution_coordinator.model;
 
 import lombok.Getter;
-import lombok.NonNull;
 import lombok.Setter;
 import lombok.ToString;
 
@@ -18,7 +17,7 @@ public class ReservationStatus {
     @Id
     @GeneratedValue(strategy= GenerationType.AUTO)
     private Long id;
-    @NonNull
+    @lombok.NonNull
     private Long reservationId;
     private CoordinationStep coordinationStep;
 }
