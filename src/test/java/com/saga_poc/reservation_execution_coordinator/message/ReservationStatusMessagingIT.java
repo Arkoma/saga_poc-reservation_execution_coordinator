@@ -54,7 +54,7 @@ class ReservationStatusMessagingIT {
     @SuppressWarnings("unchecked")
     void setKafkaTemplateInReservationStatusProducer() {
         KafkaTemplate<String, String> injectedKafkaTemplate = (KafkaTemplate<String, String>) ReflectionTestUtils
-                                                                            .getField(producerUnderTest, "kafkaTemplate");
+                .getField(producerUnderTest, "kafkaTemplate");
         assertSame(kafkaTemplate, injectedKafkaTemplate);
     }
 

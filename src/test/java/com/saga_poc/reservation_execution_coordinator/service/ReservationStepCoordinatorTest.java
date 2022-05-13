@@ -1,6 +1,12 @@
 package com.saga_poc.reservation_execution_coordinator.service;
 
+import com.saga_poc.reservation_execution_coordinator.client.CarReservationServiceClient;
+import com.saga_poc.reservation_execution_coordinator.client.HotelReservationServiceClient;
+import com.saga_poc.reservation_execution_coordinator.model.CarReservation;
+import com.saga_poc.reservation_execution_coordinator.model.CarReservationResponse;
 import com.saga_poc.reservation_execution_coordinator.model.CoordinationStep;
+import com.saga_poc.reservation_execution_coordinator.model.HotelReservation;
+import com.saga_poc.reservation_execution_coordinator.model.HotelReservationResponse;
 import com.saga_poc.reservation_execution_coordinator.model.Reservation;
 import com.saga_poc.reservation_execution_coordinator.model.ReservationStatus;
 import com.saga_poc.reservation_execution_coordinator.model.StatusEnum;
@@ -12,15 +18,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.io.IOException;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Optional;
@@ -30,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,17 +50,6 @@ class ReservationStepCoordinatorTest {
     private static final String SEAT_NUMBER = "14B";
     private static final String FLIGHT_DEPARTURE_DATE = "12 Apr 2022";
     private static final String FLIGHT_RETURN_DATE = "19 Apr 2022";
-    private static final String HOTEL_RESERVATION_201_RESPONSE = "{\n" +
-            "    \"id\": 4,\n" +
-            "    \"reservationId\": 1,\n" +
-            "    \"status\": \"RESERVED\",\n" +
-            "    \"hotelId\": 1,\n" +
-            "    \"hotelName\": \"Holiday Inn\",\n" +
-            "    \"room\": 666,\n" +
-            "    \"checkinDate\": \"2022-04-12T04:00:00.000+00:00\",\n" +
-            "    \"checkoutDate\": \"2022-04-19T04:00:00.000+00:00\"\n" +
-            "}";
-
 
     @InjectMocks
     private ReservationStepCoordinator underTest;
@@ -70,11 +57,19 @@ class ReservationStepCoordinatorTest {
     @Mock
     private ReservationStatusRepository mockRepository;
 
+    @Mock
+    private HotelReservationServiceClient mockHotelReservationServiceClient;
+
+    @Mock
+    private CarReservationServiceClient mockCarReservationServiceClient;
+
     @Captor
     private ArgumentCaptor<ReservationStatus> reservationStatusArgumentCaptor;
 
     private Reservation reservation;
     private ReservationStatus reservationStatus;
+    private HotelReservationResponse hotelReservationResponse;
+    private CarReservationResponse carReservationResponse;
 
     @BeforeEach
     void setup() throws ParseException {
@@ -99,46 +94,84 @@ class ReservationStepCoordinatorTest {
                 .flightReservationId(null)
                 .status(StatusEnum.PENDING)
                 .build();
+
         reservationStatus = new ReservationStatus();
         reservationStatus.setId(1L);
         reservationStatus.setReservationId(1L);
         reservationStatus.setCoordinationStep(CoordinationStep.RESERVE_HOTEL);
+
+        hotelReservationResponse = new HotelReservationResponse();
+        hotelReservationResponse.setId(4L);
+        hotelReservationResponse.setReservationId(1L);
+        hotelReservationResponse.setStatus(StatusEnum.RESERVED);
+        hotelReservationResponse.setHotelId(1L);
+        hotelReservationResponse.setHotelName("Holiday Inn");
+        hotelReservationResponse.setRoom(666);
+        hotelReservationResponse
+                .setCheckinDate(new SimpleDateFormat("dd MMM yyyy").parse(HOTEL_CHECKIN_DATE).toString());
+        hotelReservationResponse
+                .setCheckoutDate(new SimpleDateFormat("dd MMM yyyy").parse(HOTEL_CHECKOUT_DATE).toString());
+
+        carReservationResponse = new CarReservationResponse();
+        carReservationResponse.setId(4L);
+        carReservationResponse.setStatus(StatusEnum.RESERVED);
+        carReservationResponse.setReservationId(1L);
+        carReservationResponse.setCarId(1L);
+        carReservationResponse.setCarMake("Ford");
+        carReservationResponse.setCarModel("Model-T");
+        carReservationResponse.setAgency("Hertz");
+        carReservationResponse
+                .setCheckinDate(new SimpleDateFormat("dd MMM yyyy").parse(HOTEL_CHECKIN_DATE).toString());
+        carReservationResponse
+                .setCheckoutDate(new SimpleDateFormat("dd MMM yyyy").parse(HOTEL_CHECKOUT_DATE).toString());
     }
+
     @Test
-    void takeNextStepChecksToSeeIfReservationHasReservationStatus() throws URISyntaxException, IOException, InterruptedException {
-        HttpClient mockHttpClient = mock(HttpClient.class);
-        HttpResponse<String> mockHttpResponse = mock(HttpResponse.class);
-        try(MockedStatic<HttpClient> httpClient = Mockito.mockStatic(HttpClient.class)) {
-            httpClient.when(HttpClient::newHttpClient).thenReturn(mockHttpClient);
-            when(mockRepository.findByReservationId(anyLong())).thenReturn(Optional.empty(), Optional.of(reservationStatus));
-            when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(mockHttpResponse);
-            when(mockHttpResponse.body()).thenReturn(HOTEL_RESERVATION_201_RESPONSE);
-            underTest.handleReservation(reservation);
+    void takeNextStepChecksToSeeIfReservationHasReservationStatus() {
+        when(mockRepository.findByReservationId(anyLong()))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(reservationStatus));
+        when(mockHotelReservationServiceClient.makeReservation(any(HotelReservation.class)))
+                .thenReturn(hotelReservationResponse);
+        underTest.handleReservation(reservation);
+        verify(mockRepository, atLeastOnce()).findByReservationId(anyLong());
+    }
+
+    @Test
+    void takeNextStepCallsHotelReservationClient() {
+        when(mockRepository.findByReservationId(anyLong()))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(reservationStatus));
+        when(mockHotelReservationServiceClient.makeReservation(any(HotelReservation.class)))
+                .thenReturn(hotelReservationResponse);
+        underTest.handleReservation(reservation);
+        verify(mockHotelReservationServiceClient, atLeastOnce()).makeReservation(any(HotelReservation.class));
+    }
+
+    @Test
+    void takeNextStepCallsCarReservationClientAfterHotelReserved() {
+        when(mockRepository.findByReservationId(anyLong())).thenReturn(Optional.of(reservationStatus));
+        when(mockCarReservationServiceClient.makeReservation(any(CarReservation.class))).thenReturn(carReservationResponse);
+        underTest.handleReservation(reservation);
+        verify(mockCarReservationServiceClient, atLeastOnce()).makeReservation(any(CarReservation.class));
+    }
+
+    @Test
+    void setsReservationStatusAsSaveHotelWhenNoReservationStatusFound() {
+        when(mockRepository.findByReservationId(anyLong()))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(reservationStatus));
+        when(mockHotelReservationServiceClient.makeReservation(any(HotelReservation.class)))
+                .thenReturn(hotelReservationResponse);
+        underTest.handleReservation(reservation);
+        assertAll(() -> {
             verify(mockRepository, atLeastOnce()).findByReservationId(anyLong());
-        }
+            verify(mockRepository, atLeastOnce()).save(reservationStatusArgumentCaptor.capture());
+            final ReservationStatus reservationStatus = reservationStatusArgumentCaptor.getAllValues().get(0);
+            CoordinationStep nextStep = reservationStatus.getCoordinationStep();
+            Long reservationIdOfNextStep = reservationStatus.getReservationId();
+            assertEquals(CoordinationStep.RESERVE_HOTEL, nextStep);
+            assertEquals(ID, reservationIdOfNextStep);
+        });
     }
-
-    @Test
-    void setsReservationStatusAsSaveHotelWhenNoReservationStatusFound() throws URISyntaxException, IOException, InterruptedException {
-        HttpClient mockHttpClient = mock(HttpClient.class);
-        HttpResponse<String> mockHttpResponse = mock(HttpResponse.class);
-        try(MockedStatic<HttpClient> httpClient = Mockito.mockStatic(HttpClient.class)) {
-            httpClient.when(HttpClient::newHttpClient).thenReturn(mockHttpClient);
-            when(mockRepository.findByReservationId(anyLong())).thenReturn(Optional.empty(), Optional.of(reservationStatus));
-            when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class))).thenReturn(mockHttpResponse);
-            when(mockHttpResponse.body()).thenReturn(HOTEL_RESERVATION_201_RESPONSE);
-            underTest.handleReservation(reservation);
-            assertAll(() -> {
-                verify(mockRepository, atLeastOnce()).findByReservationId(anyLong());
-                verify(mockRepository, atLeastOnce()).save(reservationStatusArgumentCaptor.capture());
-                final ReservationStatus reservationStatus = reservationStatusArgumentCaptor.getAllValues().get(0);
-                CoordinationStep nextStep = reservationStatus.getCoordinationStep();
-                Long reservationIdOfNextStep = reservationStatus.getReservationId();
-                assertEquals(CoordinationStep.RESERVE_HOTEL, nextStep);
-                assertEquals(ID, reservationIdOfNextStep);
-            });
-        }
-    }
-
-
 }

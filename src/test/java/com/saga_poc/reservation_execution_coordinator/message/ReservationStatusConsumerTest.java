@@ -14,7 +14,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,7 +53,7 @@ class ReservationStatusConsumerTest {
     }
 
     @Test
-    void receiveCallsStepCoordinatorTakeNextStep() throws URISyntaxException, IOException, InterruptedException {
+    void receiveCallsStepCoordinatorTakeNextStep() throws IOException {
         String payload = new ObjectMapper().writeValueAsString(reservation);
         underTest.receive(payload);
         verify(reservationStepCoordinator, times(1)).handleReservation(reservationArgumentCaptor.capture());

@@ -1,7 +1,8 @@
 package com.saga_poc.reservation_execution_coordinator.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.saga_poc.reservation_execution_coordinator.client.CarReservationServiceClient;
+import com.saga_poc.reservation_execution_coordinator.client.HotelReservationServiceClient;
+import com.saga_poc.reservation_execution_coordinator.model.CarReservation;
 import com.saga_poc.reservation_execution_coordinator.model.CoordinationStep;
 import com.saga_poc.reservation_execution_coordinator.model.HotelReservation;
 import com.saga_poc.reservation_execution_coordinator.model.HotelReservationResponse;
@@ -11,66 +12,58 @@ import com.saga_poc.reservation_execution_coordinator.model.StatusEnum;
 import com.saga_poc.reservation_execution_coordinator.repository.ReservationStatusRepository;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.Objects;
-
-import static java.net.http.HttpResponse.BodyHandlers;
-
 @Service
 public class ReservationStepCoordinator {
 
-    public static final String API_BASE_URI="http://localhost:";
-    public static final String HOTEL_API_PORT="8083";
-
     private final ReservationStatusRepository reservationStatusRepository;
+    private final HotelReservationServiceClient hotelReservationServiceClient;
+    private final CarReservationServiceClient carReservationServiceClient;
 
-    public ReservationStepCoordinator(ReservationStatusRepository reservationStatusRepository) {
+    public ReservationStepCoordinator(ReservationStatusRepository reservationStatusRepository,
+                                      HotelReservationServiceClient hotelReservationServiceClient,
+                                      CarReservationServiceClient carReservationServiceClient) {
         this.reservationStatusRepository = reservationStatusRepository;
+        this.hotelReservationServiceClient = hotelReservationServiceClient;
+        this.carReservationServiceClient = carReservationServiceClient;
     }
 
-    public void handleReservation(Reservation reservation) throws URISyntaxException, IOException, InterruptedException {
+    public void handleReservation(Reservation reservation) {
         ReservationStatus status = getReservationStatus(reservation);
         CoordinationStep step = getNextStep(status);
         status = cacheStep(reservation, step, status);
         if (step == CoordinationStep.RESERVE_HOTEL) {
-            final String requestJson = Objects.requireNonNull(createRequest(reservation, step));
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(new URI(API_BASE_URI + HOTEL_API_PORT + "/reservation"))
-                    .POST(HttpRequest.BodyPublishers.ofString(requestJson))
-                    .build();
-            HttpResponse<String> response = HttpClient.newHttpClient().send(request, BodyHandlers.ofString());
-            HotelReservationResponse hotelReservationResponse = getResponse(response, HotelReservationResponse.class);
+            HotelReservationResponse hotelReservationResponse = this.hotelReservationServiceClient
+                    .makeReservation(createHotelRequest(reservation));
             if (StatusEnum.RESERVED == hotelReservationResponse.getStatus()) {
                 cacheStep(reservation, CoordinationStep.RESERVE_HOTEL, status);
                 handleReservation(reservation);
             } else {
                 cacheStep(reservation, CoordinationStep.CANCEL_RESERVATION, status);
             }
+        } else if (step == CoordinationStep.RESERVE_CAR) {
+            this.carReservationServiceClient.makeReservation(createCarRequest(reservation));
         }
     }
 
-    private String createRequest
-            (Reservation reservation, CoordinationStep step) throws JsonProcessingException {
-        if (step == CoordinationStep.RESERVE_HOTEL) {
-            final HotelReservation hotelReservation = HotelReservation.builder()
-                    .HotelName(reservation.getHotelName())
-                    .ReservationId(reservation.getId())
-                    .room(reservation.getRoom())
-                    .checkinDate(reservation.getHotelCheckinDate().getTime())
-                    .checkoutDate(reservation.getHotelCheckoutDate().getTime())
-                    .build();
-            return new ObjectMapper().writeValueAsString(hotelReservation);
-        }
-        return null;
+    private HotelReservation createHotelRequest(Reservation reservation) {
+        return HotelReservation.builder()
+                .HotelName(reservation.getHotelName())
+                .ReservationId(reservation.getId())
+                .room(reservation.getRoom())
+                .checkinDate(reservation.getHotelCheckinDate().getTime())
+                .checkoutDate(reservation.getHotelCheckoutDate().getTime())
+                .build();
     }
 
-    private <T extends HotelReservationResponse> T getResponse(HttpResponse<String> response, Class<T> type) throws JsonProcessingException {
-        return new ObjectMapper().readValue(response.body(), type);
+    private CarReservation createCarRequest(Reservation reservation) {
+        return CarReservation.builder()
+                .carMake(reservation.getCarMake())
+                .carModel(reservation.getCarModel())
+                .reservationId(reservation.getId())
+                .agency(reservation.getCarAgency())
+                .checkinDate(reservation.getCarRentalDate())
+                .checkoutDate(reservation.getCarReturnDate())
+                .build();
     }
 
     private ReservationStatus cacheStep(Reservation reservation, CoordinationStep step, ReservationStatus status) {
@@ -85,8 +78,10 @@ public class ReservationStepCoordinator {
     private CoordinationStep getNextStep(ReservationStatus status) {
         if (status == null) {
             return CoordinationStep.RESERVE_HOTEL;
-        } else if (status.getCoordinationStep() == CoordinationStep.RESERVE_HOTEL) {
+        } else if (CoordinationStep.RESERVE_HOTEL == status.getCoordinationStep()) {
             return CoordinationStep.RESERVE_CAR;
+        } else if (CoordinationStep.RESERVE_CAR == status.getCoordinationStep()) {
+            return CoordinationStep.RESERVE_FLIGHT;
         } else {
             return CoordinationStep.FINALIZE_RESERVATION;
         }

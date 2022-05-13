@@ -7,7 +7,6 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 
 @Component
 public class ReservationStatusConsumer {
@@ -21,7 +20,7 @@ public class ReservationStatusConsumer {
     }
 
     @KafkaListener(topics = "${spring.kafka.template.default-topic}")
-    public void receive(String payload) throws IOException, URISyntaxException, InterruptedException {
+    public void receive(String payload) throws IOException {
         setPayload(payload);
         Reservation reservation = new ObjectMapper().readValue(payload, Reservation.class);
         this.reservationStepCoordinator.handleReservation(reservation);

@@ -2,10 +2,12 @@ package com.saga_poc.reservation_execution_coordinator.service;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.saga_poc.reservation_execution_coordinator.model.CoordinationStep;
+import com.saga_poc.reservation_execution_coordinator.model.Endpoints;
 import com.saga_poc.reservation_execution_coordinator.model.Reservation;
 import com.saga_poc.reservation_execution_coordinator.model.ReservationStatus;
 import com.saga_poc.reservation_execution_coordinator.model.StatusEnum;
 import com.saga_poc.reservation_execution_coordinator.repository.ReservationStatusRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -17,8 +19,6 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.io.IOException;
-import java.net.URISyntaxException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Optional;
@@ -43,13 +43,16 @@ class ReservationStepCoordinatorIT {
     private ReservationStepCoordinator underTest;
 
     @Autowired
-    private ReservationStatusRepository repository;
-
-    public static final Integer HOTEL_API_PORT = 8083;
+    private ReservationStatusRepository reservationStatusRepository;
 
     @RegisterExtension
     static WireMockExtension hotelWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(HOTEL_API_PORT))
+            .options(wireMockConfig().port(Integer.parseInt(Endpoints.HOTEL_API_PORT)))
+            .build();
+
+    @RegisterExtension
+    static WireMockExtension carWireMock = WireMockExtension.newInstance()
+            .options(wireMockConfig().port(Integer.parseInt(Endpoints.CAR_API_PORT)))
             .build();
 
     private Reservation reservation;
@@ -78,6 +81,17 @@ class ReservationStepCoordinatorIT {
             "    \"checkinDate\": \"2022-04-12T04:00:00.000+00:00\",\n" +
             "    \"checkoutDate\": \"2022-04-19T04:00:00.000+00:00\"\n" +
             "}";
+    private static final String CAR_RESERVATION_201_RESPONSE = "{\n" +
+            "    \"id\": 4,\n" +
+            "    \"status\": \"RESERVED\",\n" +
+            "    \"reservationId\": 1,\n" +
+            "    \"carId\": 1,\n" +
+            "    \"carMake\": \"Ford\",\n" +
+            "    \"carModel\": \"Model-T\",\n" +
+            "    \"agency\": \"Hertz\",\n" +
+            "    \"checkinDate\": \"2022-02-09T05:00:00.000+00:00\",\n" +
+            "    \"checkoutDate\": \"2022-02-12T05:00:00.000+00:00\"\n" +
+            "}";
 
     @BeforeEach
     void setup() throws ParseException {
@@ -102,6 +116,21 @@ class ReservationStepCoordinatorIT {
                 .flightReservationId(null)
                 .status(StatusEnum.PENDING)
                 .build();
+        hotelWireMock.stubFor(post("/reservation")
+                .willReturn(aResponse()
+                        .withStatus(201)
+                        .withHeader("Content-Type", String.valueOf(MediaType.APPLICATION_JSON))
+                        .withBody(HOTEL_RESERVATION_201_RESPONSE)));
+        carWireMock.stubFor(post("/reservation")
+                .willReturn(aResponse()
+                        .withStatus(201)
+                        .withHeader("Content-Type", String.valueOf(MediaType.APPLICATION_JSON))
+                        .withBody(CAR_RESERVATION_201_RESPONSE)));
+    }
+
+    @AfterEach
+    void tearDown() {
+        this.reservationStatusRepository.deleteAll();
     }
 
     @Test
@@ -113,21 +142,16 @@ class ReservationStepCoordinatorIT {
     void setReservationStatusRepositoryInReservationStepCoordinator() {
         ReservationStatusRepository injectedRepository = (ReservationStatusRepository) ReflectionTestUtils
                 .getField(underTest, "reservationStatusRepository");
-        assertSame(repository, injectedRepository);
+        assertSame(reservationStatusRepository, injectedRepository);
     }
 
     @Test
-    void handleReservationWithHotel201ResponseSetsCoordinationStepToCarReservation() throws URISyntaxException, IOException, InterruptedException {
-        assertFalse(repository.findByReservationId(1L).isPresent());
-        hotelWireMock.stubFor(post("/reservation")
-                .willReturn(aResponse()
-                        .withStatus(201)
-                        .withHeader("Content-Type", String.valueOf(MediaType.APPLICATION_JSON))
-                        .withBody(HOTEL_RESERVATION_201_RESPONSE)));
+    void handleReservationWithHotel201ResponseSetsCoordinationStepToCarReservation() {
+        assertFalse(reservationStatusRepository.findByReservationId(1L).isPresent());
 
         underTest.handleReservation(reservation);
 
-        final Optional<ReservationStatus> byReservationId = repository.findByReservationId(1L);
+        final Optional<ReservationStatus> byReservationId = reservationStatusRepository.findByReservationId(1L);
         ReservationStatus reservationStatus = null;
         if (byReservationId.isPresent()) {
             reservationStatus = byReservationId.get();
@@ -136,4 +160,25 @@ class ReservationStepCoordinatorIT {
         assertEquals(CoordinationStep.RESERVE_CAR, reservationStatus.getCoordinationStep());
     }
 
+    @Test
+    void handleReservationWithCar201ResponseSetsCoordinationStepToFlightReservation() {
+        // assemble
+        assertFalse(reservationStatusRepository.findByReservationId(1L).isPresent());
+        ReservationStatus status = new ReservationStatus();
+        status.setReservationId(reservation.getId());
+        status.setCoordinationStep(CoordinationStep.RESERVE_CAR);
+        reservationStatusRepository.save(status);
+
+        //act
+        underTest.handleReservation(reservation);
+
+        final Optional<ReservationStatus> byReservationId = reservationStatusRepository.findByReservationId(1L);
+        ReservationStatus reservationStatus = null;
+        if (byReservationId.isPresent()) {
+            reservationStatus = byReservationId.get();
+        }
+        // assert
+        assert reservationStatus != null;
+        assertEquals(CoordinationStep.RESERVE_FLIGHT, reservationStatus.getCoordinationStep());
+    }
 }
