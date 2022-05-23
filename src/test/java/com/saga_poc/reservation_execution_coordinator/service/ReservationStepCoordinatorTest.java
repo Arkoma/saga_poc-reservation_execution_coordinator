@@ -166,8 +166,6 @@ class ReservationStepCoordinatorTest {
         underTest.handleReservation(reservation);
         assertAll(() -> {
             verify(mockRepository, atLeastOnce()).findByReservationId(anyLong());
-            verify(mockRepository, atLeastOnce()).save(reservationStatusArgumentCaptor.capture());
-            final ReservationStatus reservationStatus = reservationStatusArgumentCaptor.getAllValues().get(0);
             CoordinationStep nextStep = reservationStatus.getCoordinationStep();
             Long reservationIdOfNextStep = reservationStatus.getReservationId();
             assertEquals(CoordinationStep.RESERVE_HOTEL, nextStep);

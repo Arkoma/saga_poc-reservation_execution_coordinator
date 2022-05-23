@@ -7,7 +7,10 @@ spring:
       value-deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
     template:
       default-topic: reservation
+
 feign:
+  hysterix:
+    enabled: true
   client:
     config:
       hotelReservationService:
@@ -18,5 +21,10 @@ feign:
         connectionTimeout: 5000
         readTimeout: 5000
         logerLevel: basic
+      flightReservationService:
+        connectionTimeout: 5000
+        readTimeout: 5000
+        logerLevel: basic
+
 server:
   port: 8082
