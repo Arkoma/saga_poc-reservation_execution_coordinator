@@ -9,7 +9,7 @@ spring:
       default-topic: reservation
 
 feign:
-  hysterix:
+  circuitbreaker:
     enabled: true
   client:
     config:

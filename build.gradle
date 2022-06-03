@@ -27,7 +27,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web:2.6.7'
 	implementation 'org.springframework.kafka:spring-kafka:2.8.5'
 	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.2'
-	implementation 'org.springframework.cloud:spring-cloud-dependencies:2021.0.2'
+	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j:2.1.2'
 	compileOnly 'org.projectlombok:lombok:1.18.24'
 	runtimeOnly 'com.h2database:h2:2.1.212'
 	annotationProcessor 'org.projectlombok:lombok:1.18.24'
