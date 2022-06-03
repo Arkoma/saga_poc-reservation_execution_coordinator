@@ -1,12 +1,12 @@
 package com.saga_poc.reservation_execution_coordinator.service;
 
-import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import com.saga_poc.reservation_execution_coordinator.model.Endpoints;
 import com.saga_poc.reservation_execution_coordinator.model.Reservation;
 import com.saga_poc.reservation_execution_coordinator.model.StatusEnum;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
@@ -21,20 +21,14 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.delete;
 import static com.github.tomakehurst.wiremock.client.WireMock.deleteRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.exactly;
-import static com.github.tomakehurst.wiremock.client.WireMock.getAllServeEvents;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
-import static com.github.tomakehurst.wiremock.client.WireMock.verify;
-import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
 @DirtiesContext
-@EmbeddedKafka(partitions = 1, brokerProperties = { "listeners=PLAINTEXT://localhost:9092", "port=9092" })
+@EmbeddedKafka(partitions = 1, brokerProperties = {"listeners=PLAINTEXT://localhost:9092", "port=9092"})
 class ReservationStepCoordinatorIT {
 
     @Autowired
@@ -43,23 +37,25 @@ class ReservationStepCoordinatorIT {
     @Autowired
     private ReservationStepCoordinator underTest;
 
-//    @Autowired
-//    private ReservationStatusRepository reservationStatusRepository;
+//    @RegisterExtension
+//    static WireMockExtension hotelWireMock = WireMockExtension.newInstance()
+//            .options(wireMockConfig().port(Integer.parseInt(Endpoints.HOTEL_API_PORT)))
+//            .build();
+//
+//    @RegisterExtension
+//    static WireMockExtension carWireMock = WireMockExtension.newInstance()
+//            .options(wireMockConfig().port(Integer.parseInt(Endpoints.CAR_API_PORT)))
+//            .build();
+//
+//    @RegisterExtension
+//    static WireMockExtension flightWireMock = WireMockExtension.newInstance()
+//            .options(wireMockConfig().port(Integer.parseInt(Endpoints.FLIGHT_API_PORT)))
+//            .build();
 
-    @RegisterExtension
-    static WireMockExtension hotelWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(Integer.parseInt(Endpoints.HOTEL_API_PORT)))
-            .build();
+    private WireMockServer hotelWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.HOTEL_API_PORT));
+    private WireMockServer carWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.CAR_API_PORT));
+    private WireMockServer flightWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.FLIGHT_API_PORT));
 
-    @RegisterExtension
-    static WireMockExtension carWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(Integer.parseInt(Endpoints.CAR_API_PORT)))
-            .build();
-
-    @RegisterExtension
-    static WireMockExtension flightWireMock = WireMockExtension.newInstance()
-            .options(wireMockConfig().port(Integer.parseInt(Endpoints.FLIGHT_API_PORT)))
-            .build();
 
     private Reservation reservation;
     private static final long ID = 1L;
@@ -138,25 +134,34 @@ class ReservationStepCoordinatorIT {
                 .flightReservationId(null)
                 .status(StatusEnum.PENDING)
                 .build();
-        hotelWireMock.stubFor(post("/reservation")
+        hotelWireMockServer.stubFor(post("/reservation")
                 .willReturn(aResponse()
                         .withStatus(201)
                         .withHeader("Content-Type", String.valueOf(MediaType.APPLICATION_JSON))
                         .withBody(HOTEL_RESERVATION_SUCCESS)));
-        carWireMock.stubFor(post("/reservation")
+        carWireMockServer.stubFor(post("/reservation")
                 .willReturn(aResponse()
                         .withStatus(201)
                         .withHeader("Content-Type", String.valueOf(MediaType.APPLICATION_JSON))
                         .withBody(CAR_RESERVATION_SUCCESS)));
-        flightWireMock.stubFor(post("/reservation")
+        flightWireMockServer.stubFor(post("/reservation")
                 .willReturn(aResponse()
                         .withStatus(201)
                         .withHeader("Content-Type", String.valueOf(MediaType.APPLICATION_JSON))
                         .withBody(FLIGHT_RESERVATION_SUCCESS)));
-        flightWireMock.stubFor(delete("/reservation/5").willReturn(aResponse().withStatus(204)));
-        carWireMock.stubFor(delete("/reservation/4").willReturn(aResponse().withStatus(204)));
-        hotelWireMock.stubFor(delete("/reservation/4").willReturn(aResponse().withStatus(204)));
+        flightWireMockServer.stubFor(delete("/reservation/5").willReturn(aResponse().withStatus(204)));
+        carWireMockServer.stubFor(delete("/reservation/4").willReturn(aResponse().withStatus(204)));
+        hotelWireMockServer.stubFor(delete("/reservation/4").willReturn(aResponse().withStatus(204)));
+        hotelWireMockServer.start();
+        carWireMockServer.start();
+        flightWireMockServer.start();
+    }
 
+    @AfterEach
+    void tearDown() {
+        hotelWireMockServer.stop();
+        carWireMockServer.stop();
+        flightWireMockServer.stop();
     }
 
     @Test
@@ -167,23 +172,24 @@ class ReservationStepCoordinatorIT {
     @Test
     void handleReservationWith201ResponsesCallsEachService() {
         underTest.handleReservation(reservation);
-        hotelWireMock.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
-        carWireMock.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
-        flightWireMock.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
+        hotelWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
+        carWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
+        flightWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
     }
 
     @Test
     void handleReservationWithHotelAndCarSuccessButFlightErrorWalksBackReservation() {
-        flightWireMock.stubFor(post("/reservation")
+        flightWireMockServer.stubFor(post("/reservation")
                 .willReturn(aResponse()
-                        .withStatus(200)
-                        .withFixedDelay(6000)));
+                        .withStatus(500)));
+
         underTest.handleReservation(reservation);
-        hotelWireMock.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
-        carWireMock.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
-        flightWireMock.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
-        flightWireMock.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/5")));
-        carWireMock.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/4")));
-        hotelWireMock.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/4")));
+
+        hotelWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
+        carWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
+        flightWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
+        flightWireMockServer.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/5")));
+        carWireMockServer.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/4")));
+        hotelWireMockServer.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/4")));
     }
 }
