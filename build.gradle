@@ -4,10 +4,6 @@ plugins {
 	id 'java'
 }
 
-group = 'com.saga_poc'
-version = '0.0.1-SNAPSHOT'
-//sourceCompatibility = '11'
-
 configurations {
 	compileOnly {
 		extendsFrom annotationProcessor
@@ -23,18 +19,26 @@ ext {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa:2.6.7'
-	implementation 'org.springframework.boot:spring-boot-starter-web:2.6.7'
-	implementation 'org.springframework.kafka:spring-kafka:2.8.5'
-	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.2'
-	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j:2.1.2'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa:2.7.1'
+	implementation 'org.springframework.boot:spring-boot-starter-web:2.7.1'
+	implementation 'org.springframework.kafka:spring-kafka:2.8.7'
+	implementation 'org.springframework.cloud:spring-cloud-starter-openfeign:3.1.3'
+	implementation 'commons-io:commons-io:2.11.0'
+	implementation 'org.bouncycastle:bcprov-jdk15on:1.70'
+	implementation 'org.springframework:spring-messaging:5.3.21'
+	implementation 'org.springframework:spring-beans:5.3.21'
+	implementation 'org.springframework:spring-context:5.3.21'
+	implementation 'org.springframework.security:spring-security-crypto:5.7.1'
+	implementation 'com.fasterxml.jackson.core:jackson-databind:2.13.3'
+	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j:2.1.3'
 	compileOnly 'org.projectlombok:lombok:1.18.24'
 	runtimeOnly 'com.h2database:h2:2.1.212'
 	annotationProcessor 'org.projectlombok:lombok:1.18.24'
-	testImplementation 'org.springframework.boot:spring-boot-starter-test:2.6.7'
-	testImplementation 'org.springframework.kafka:spring-kafka-test:2.8.5'
-	testImplementation 'org.testcontainers:junit-jupiter:1.17.1'
-	testImplementation 'org.testcontainers:kafka:1.17.1'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test:2.7.0'
+	testImplementation 'org.springframework.kafka:spring-kafka-test:2.8.7'
+	implementation 'io.netty:netty-common:4.1.79.Final'
+	testImplementation 'org.testcontainers:junit-jupiter:1.17.2'
+	testImplementation 'org.testcontainers:kafka:1.17.2'
 	testImplementation 'com.github.tomakehurst:wiremock-jre8-standalone:2.33.2'
 }
 
