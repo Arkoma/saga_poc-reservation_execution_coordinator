@@ -1,12 +1,12 @@
 package com.saga_poc.reservation_execution_coordinator.client;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
-import com.github.tomakehurst.wiremock.http.Fault;
 import com.saga_poc.reservation_execution_coordinator.model.Endpoints;
 import com.saga_poc.reservation_execution_coordinator.model.FlightReservation;
 import com.saga_poc.reservation_execution_coordinator.model.FlightReservationResponse;
 import com.saga_poc.reservation_execution_coordinator.model.StatusEnum;
-import feign.FeignException;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,19 +16,16 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
-@SpringBootTest
+@SpringBootTest({"feign.circuitbreaker.enabled=true"})
 @EmbeddedKafka(partitions = 1, brokerProperties = {"listeners=PLAINTEXT://localhost:9092", "port=9092"})
 class FlightReservationServiceClientIT {
 
-    private WireMockServer flightWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.FLIGHT_API_PORT));
+    private final WireMockServer flightWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.FLIGHT_API_PORT));
 
     @Qualifier("com.saga_poc.reservation_execution_coordinator.client.FlightReservationServiceClient")
     @Autowired
@@ -66,8 +63,22 @@ class FlightReservationServiceClientIT {
             "    \"returnDate\": \"2022-02-12T05:00:00.000+00:00\"\n" +
             "}";
 
+    @BeforeEach
+    void before() {
+        if (!flightWireMockServer.isRunning()) {
+            flightWireMockServer.start();
+        }
+    }
+
+    @AfterEach
+    void after() {
+        if (flightWireMockServer.isRunning()) {
+            flightWireMockServer.stop();
+        }
+    }
+
     @Test
-    void makeReservationHappy() throws ParseException {
+    void makeReservationReturnsExpectedResponse() {
         FlightReservationResponse expectedResponse = new FlightReservationResponse();
         expectedResponse.setId(5L);
         expectedResponse.setStatus(StatusEnum.RESERVED);
@@ -83,30 +94,21 @@ class FlightReservationServiceClientIT {
                         .withHeader("Content-Type", String.valueOf(MediaType.APPLICATION_JSON))
                         .withBody(FLIGHT_RESERVATION_SUCCESS)));
 
-        flightWireMockServer.start();
         FlightReservationResponse response = underTest.makeReservation(flightReservation);
+
         assertEquals(expectedResponse, response);
-        flightWireMockServer.stop();
     }
 
     @Test
-    public void makeReservationSad() throws Exception {
+    public void makeReservationFallbackReturnsCanceledResponse() {
         flightWireMockServer.stubFor(post("/reservation")
                 .willReturn(aResponse()
-                        .withFault(Fault.RANDOM_DATA_THEN_CLOSE)));
-
-        flightWireMockServer.start();
-
+                        .withStatus(500)));
         FlightReservationResponse expectedResponse = new FlightReservationResponse();
         expectedResponse.setStatus(StatusEnum.CANCELED);
-        AtomicReference<FlightReservationResponse> actualResponse = new AtomicReference<>();
-        try {
-            actualResponse.set(underTest.makeReservation(flightReservation));
-            fail("Test scenario expects Feign Client Exception at this point");
-        } catch (FeignException e) {
-            assertEquals(expectedResponse.getStatus(), actualResponse.get().getStatus());
-        }
 
-        flightWireMockServer.stop();
+        FlightReservationResponse actualResponse = underTest.makeReservation(flightReservation);
+
+        assertEquals(expectedResponse.getStatus(), actualResponse.getStatus());
     }
 }
