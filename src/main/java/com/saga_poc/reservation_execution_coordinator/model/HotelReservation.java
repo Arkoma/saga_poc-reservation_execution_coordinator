@@ -6,8 +6,8 @@ import lombok.Getter;
 @Builder
 @Getter
 public class HotelReservation {
-    private String HotelName;
-    private Long ReservationId;
+    private Long reservationId;
+    private String hotelName;
     private int room;
     private long checkinDate;
     private long checkoutDate;

@@ -10,7 +10,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import static org.springframework.web.bind.annotation.RequestMethod.DELETE;
 import static org.springframework.web.bind.annotation.RequestMethod.POST;
 
-@FeignClient(value = "carReservationService", url = Endpoints.BASE_URL + Endpoints.CAR_API_PORT + "/")
+@FeignClient(value    = "carReservationService",
+             url      = Endpoints.BASE_URL + Endpoints.CAR_API_PORT + "/",
+             fallback = CarReservationServiceFallback.class)
 public interface CarReservationServiceClient {
 
     @RequestMapping(method = POST, value = "/reservation")

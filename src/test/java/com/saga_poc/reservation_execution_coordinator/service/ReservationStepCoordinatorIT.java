@@ -26,7 +26,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@SpringBootTest
+@SpringBootTest({"feign.circuitbreaker.enabled=true"})
 @DirtiesContext
 @EmbeddedKafka(partitions = 1, brokerProperties = {"listeners=PLAINTEXT://localhost:9092", "port=9092"})
 class ReservationStepCoordinatorIT {
@@ -37,24 +37,9 @@ class ReservationStepCoordinatorIT {
     @Autowired
     private ReservationStepCoordinator underTest;
 
-//    @RegisterExtension
-//    static WireMockExtension hotelWireMock = WireMockExtension.newInstance()
-//            .options(wireMockConfig().port(Integer.parseInt(Endpoints.HOTEL_API_PORT)))
-//            .build();
-//
-//    @RegisterExtension
-//    static WireMockExtension carWireMock = WireMockExtension.newInstance()
-//            .options(wireMockConfig().port(Integer.parseInt(Endpoints.CAR_API_PORT)))
-//            .build();
-//
-//    @RegisterExtension
-//    static WireMockExtension flightWireMock = WireMockExtension.newInstance()
-//            .options(wireMockConfig().port(Integer.parseInt(Endpoints.FLIGHT_API_PORT)))
-//            .build();
-
-    private WireMockServer hotelWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.HOTEL_API_PORT));
-    private WireMockServer carWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.CAR_API_PORT));
-    private WireMockServer flightWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.FLIGHT_API_PORT));
+    private final WireMockServer hotelWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.HOTEL_API_PORT));
+    private final WireMockServer carWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.CAR_API_PORT));
+    private final WireMockServer flightWireMockServer = new WireMockServer(Integer.parseInt(Endpoints.FLIGHT_API_PORT));
 
 
     private Reservation reservation;
@@ -104,15 +89,12 @@ class ReservationStepCoordinatorIT {
             "    \"departureDate\": \"2022-02-09T05:00:00.000+00:00\",\n" +
             "    \"returnDate\": \"2022-02-12T05:00:00.000+00:00\"\n" +
             "}";
-    private static final String RESERVATION_ERROR = "{\n" +
-            "    \"timestamp\": \"2022-05-21T01:23:23.417+00:00\",\n" +
-            "    \"status\": 415,\n" +
-            "    \"error\": \"Unsupported Media Type\",\n" +
-            "    \"path\": \"/reservation\"\n" +
-            "}";
 
     @BeforeEach
     void setup() throws ParseException {
+        if (!hotelWireMockServer.isRunning()) hotelWireMockServer.start();
+        if (!carWireMockServer.isRunning()) carWireMockServer.start();
+        if (!flightWireMockServer.isRunning()) flightWireMockServer.start();
         reservation = Reservation.builder()
                 .id(ID)
                 .customerName(CUSTOMER_NAME)
@@ -152,16 +134,14 @@ class ReservationStepCoordinatorIT {
         flightWireMockServer.stubFor(delete("/reservation/5").willReturn(aResponse().withStatus(204)));
         carWireMockServer.stubFor(delete("/reservation/4").willReturn(aResponse().withStatus(204)));
         hotelWireMockServer.stubFor(delete("/reservation/4").willReturn(aResponse().withStatus(204)));
-        hotelWireMockServer.start();
-        carWireMockServer.start();
-        flightWireMockServer.start();
+
     }
 
     @AfterEach
     void tearDown() {
-        hotelWireMockServer.stop();
-        carWireMockServer.stop();
-        flightWireMockServer.stop();
+        if (hotelWireMockServer.isRunning()) hotelWireMockServer.stop();
+        if (carWireMockServer.isRunning()) carWireMockServer.stop();
+        if (flightWireMockServer.isRunning()) flightWireMockServer.stop();
     }
 
     @Test
@@ -188,7 +168,6 @@ class ReservationStepCoordinatorIT {
         hotelWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
         carWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
         flightWireMockServer.verify(exactly(1), postRequestedFor(urlEqualTo("/reservation")));
-        flightWireMockServer.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/5")));
         carWireMockServer.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/4")));
         hotelWireMockServer.verify(exactly(1), deleteRequestedFor(urlEqualTo("/reservation/4")));
     }

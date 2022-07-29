@@ -11,7 +11,6 @@ import com.saga_poc.reservation_execution_coordinator.model.HotelReservation;
 import com.saga_poc.reservation_execution_coordinator.model.HotelReservationResponse;
 import com.saga_poc.reservation_execution_coordinator.model.Reservation;
 import com.saga_poc.reservation_execution_coordinator.model.ReservationStatus;
-import com.saga_poc.reservation_execution_coordinator.model.StatusEnum;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -29,10 +28,12 @@ public class ReservationStepCoordinator {
     private final CarReservationServiceClient carReservationServiceClient;
     private final FlightReservationServiceClient flightReservationServiceClient;
 
-    public ReservationStepCoordinator(HotelReservationServiceClient hotelReservationServiceClient,
+    public ReservationStepCoordinator(@Qualifier("com.saga_poc.reservation_execution_coordinator.client.HotelReservationServiceClient")
+                                      HotelReservationServiceClient hotelReservationServiceClient,
+                                      @Qualifier("com.saga_poc.reservation_execution_coordinator.client.CarReservationServiceClient")
                                       CarReservationServiceClient carReservationServiceClient,
                                       @Qualifier("com.saga_poc.reservation_execution_coordinator.client.FlightReservationServiceClient")
-                                              FlightReservationServiceClient flightReservationServiceClient) {
+                                      FlightReservationServiceClient flightReservationServiceClient) {
         this.hotelReservationServiceClient = hotelReservationServiceClient;
         this.carReservationServiceClient = carReservationServiceClient;
         this.flightReservationServiceClient = flightReservationServiceClient;
@@ -93,8 +94,8 @@ public class ReservationStepCoordinator {
 
     private HotelReservation createHotelRequest(Reservation reservation) {
         return HotelReservation.builder()
-                .HotelName(reservation.getHotelName())
-                .ReservationId(reservation.getId())
+                .hotelName(reservation.getHotelName())
+                .reservationId(reservation.getId())
                 .room(reservation.getRoom())
                 .checkinDate(reservation.getHotelCheckinDate().getTime())
                 .checkoutDate(reservation.getHotelCheckoutDate().getTime())

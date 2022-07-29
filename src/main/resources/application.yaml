@@ -14,17 +14,11 @@ feign:
   client:
     config:
       hotelReservationService:
-        connectionTimeout: 5000
         readTimeout: 5000
-        logerLevel: basic
       carReservationService:
-        connectionTimeout: 5000
         readTimeout: 5000
-        logerLevel: basic
       flightReservationService:
-        connectionTimeout: 5000
         readTimeout: 5000
-        logerLevel: basic
 
 server:
   port: 8082
