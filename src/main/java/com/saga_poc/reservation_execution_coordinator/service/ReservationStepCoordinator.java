@@ -70,6 +70,7 @@ public class ReservationStepCoordinator {
                     status.setCoordinationStep(CANCEL_CAR);
                     handleReservation(reservation, status);
                 }
+                break;
             case CANCEL_CAR:
                 this.carReservationServiceClient.cancelReservation(reservation.getCarReservationId());
                 status.setCoordinationStep(CANCEL_HOTEL);
