@@ -7,10 +7,12 @@ import com.saga_poc.reservation_execution_coordinator.model.CarReservation;
 import com.saga_poc.reservation_execution_coordinator.model.CarReservationResponse;
 import com.saga_poc.reservation_execution_coordinator.model.FlightReservation;
 import com.saga_poc.reservation_execution_coordinator.model.FlightReservationResponse;
+import com.saga_poc.reservation_execution_coordinator.model.HotelPlan;
 import com.saga_poc.reservation_execution_coordinator.model.HotelReservation;
 import com.saga_poc.reservation_execution_coordinator.model.HotelReservationResponse;
 import com.saga_poc.reservation_execution_coordinator.model.Reservation;
 import com.saga_poc.reservation_execution_coordinator.model.ReservationStatus;
+import com.saga_poc.reservation_execution_coordinator.model.TravelPlan;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
@@ -42,19 +44,17 @@ public class ReservationStepCoordinator {
     public void handleReservation(Reservation reservation) {
         this.handleReservation(reservation, null);
     }
-    private void handleReservation(Reservation reservation, ReservationStatus status) {
+    public void handleReservation(Reservation reservation, ReservationStatus status) {
         if (status == null) {
             status = new ReservationStatus();
             status.setReservationId(reservation.getId());
             status.setCoordinationStep(RESERVE_HOTEL);
         }
+        TravelPlan travelPlan;
         switch (status.getCoordinationStep()) {
             case RESERVE_HOTEL:
-                final HotelReservationResponse hotelReservationResponse = this.hotelReservationServiceClient
-                        .makeReservation(createHotelRequest(reservation));
-                reservation.setHotelReservationId(hotelReservationResponse.getId());
-                status.setCoordinationStep(RESERVE_CAR);
-                handleReservation(reservation, status);
+                travelPlan = new HotelPlan(this.hotelReservationServiceClient, this);
+                travelPlan.reserve(reservation, status);
                 break;
             case RESERVE_CAR:
                 final CarReservationResponse carReservationResponse = this.carReservationServiceClient
@@ -93,15 +93,7 @@ public class ReservationStepCoordinator {
                 .build();
     }
 
-    private HotelReservation createHotelRequest(Reservation reservation) {
-        return HotelReservation.builder()
-                .hotelName(reservation.getHotelName())
-                .reservationId(reservation.getId())
-                .room(reservation.getRoom())
-                .checkinDate(reservation.getHotelCheckinDate().getTime())
-                .checkoutDate(reservation.getHotelCheckoutDate().getTime())
-                .build();
-    }
+
 
     private CarReservation createCarRequest(Reservation reservation) {
         return CarReservation.builder()
